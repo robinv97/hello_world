@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patrimony Tracker - Mobile</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; }
+        .btn-primary { background: #0284c7; color: white; padding: 0.5rem 1rem; border-radius: 6px; border: none; font-weight: 500; }
+        .btn-secondary { background: #f3f4f6; color: #374151; padding: 0.5rem 1rem; border-radius: 6px; border: none; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Storage utilities
+        const STORAGE_KEY = 'patrimony-data';
+        
+        const loadData = () => {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                return stored ? JSON.parse(stored) : { bankAccounts: [], investments: [] };
+            } catch (error) {
+                return { bankAccounts: [], investments: [] };
+            }
+        };
+
+        const saveData = (data) => {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            } catch (error) {
+                console.error('Error saving data:', error);
+            }
+        };
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+            }).format(amount);
+        };
+
+        // Simple Modal Component
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold">{title}</h3>
+                            <button onClick={onClose} className="text-gray-500 text-xl">&times;</button>
+                        </div>
+                        {children}
+                    </div>
+                </div>
+            );
+        };
+
+        // Add Account Modal
+        const AddAccountModal = ({ isOpen, onClose, onAdd }) => {
+            const [formData, setFormData] = useState({
+                name: '', bank: '', balance: 0, accountType: 'checking'
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (formData.name && formData.bank) {
+                    onAdd({
+                        ...formData,
+                        id: Date.now().toString(),
+                        currency: 'USD',
+                        lastUpdated: new Date().toISOString()
+                    });
+                    setFormData({ name: '', bank: '', balance: 0, accountType: 'checking' });
+                    onClose();
+                }
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Add Bank Account">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="Account Name"
+                            value={formData.name}
+                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Bank Name"
+                            value={formData.bank}
+                            onChange={(e) => setFormData({...formData, bank: e.target.value})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <input
+                            type="number"
+                            placeholder="Balance"
+                            value={formData.balance}
+                            onChange={(e) => setFormData({...formData, balance: parseFloat(e.target.value) || 0})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <select
+                            value={formData.accountType}
+                            onChange={(e) => setFormData({...formData, accountType: e.target.value})}
+                            className="w-full p-2 border rounded"
+                        >
+                            <option value="checking">Checking</option>
+                            <option value="savings">Savings</option>
+                            <option value="money_market">Money Market</option>
+                        </select>
+                        <div className="flex space-x-2">
+                            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+                            <button type="submit" className="btn-primary flex-1">Add Account</button>
+                        </div>
+                    </form>
+                </Modal>
+            );
+        };
+
+        // Add Investment Modal
+        const AddInvestmentModal = ({ isOpen, onClose, onAdd }) => {
+            const [formData, setFormData] = useState({
+                name: '', type: 'stocks', quantity: 0, currentPrice: 0, purchasePrice: 0
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (formData.name && formData.quantity > 0) {
+                    onAdd({
+                        ...formData,
+                        id: Date.now().toString(),
+                        currency: 'USD',
+                        lastUpdated: new Date().toISOString()
+                    });
+                    setFormData({ name: '', type: 'stocks', quantity: 0, currentPrice: 0, purchasePrice: 0 });
+                    onClose();
+                }
+            };
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Add Investment">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="Investment Name"
+                            value={formData.name}
+                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <select
+                            value={formData.type}
+                            onChange={(e) => setFormData({...formData, type: e.target.value})}
+                            className="w-full p-2 border rounded"
+                        >
+                            <option value="stocks">Stocks</option>
+                            <option value="crypto">Cryptocurrency</option>
+                            <option value="etf">ETF</option>
+                            <option value="real_estate">Real Estate</option>
+                        </select>
+                        <input
+                            type="number"
+                            placeholder="Quantity"
+                            value={formData.quantity}
+                            onChange={(e) => setFormData({...formData, quantity: parseFloat(e.target.value) || 0})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <input
+                            type="number"
+                            placeholder="Current Price"
+                            value={formData.currentPrice}
+                            onChange={(e) => setFormData({...formData, currentPrice: parseFloat(e.target.value) || 0})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <input
+                            type="number"
+                            placeholder="Purchase Price"
+                            value={formData.purchasePrice}
+                            onChange={(e) => setFormData({...formData, purchasePrice: parseFloat(e.target.value) || 0})}
+                            className="w-full p-2 border rounded"
+                        />
+                        <div className="flex space-x-2">
+                            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+                            <button type="submit" className="btn-primary flex-1">Add Investment</button>
+                        </div>
+                    </form>
+                </Modal>
+            );
+        };
+
+        // Main App
+        const App = () => {
+            const [data, setData] = useState(loadData);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [showAddAccount, setShowAddAccount] = useState(false);
+            const [showAddInvestment, setShowAddInvestment] = useState(false);
+
+            useEffect(() => {
+                saveData(data);
+            }, [data]);
+
+            const addAccount = (account) => {
+                setData(prev => ({
+                    ...prev,
+                    bankAccounts: [...prev.bankAccounts, account]
+                }));
+            };
+
+            const addInvestment = (investment) => {
+                setData(prev => ({
+                    ...prev,
+                    investments: [...prev.investments, investment]
+                }));
+            };
+
+            const deleteAccount = (id) => {
+                if (confirm('Delete this account?')) {
+                    setData(prev => ({
+                        ...prev,
+                        bankAccounts: prev.bankAccounts.filter(acc => acc.id !== id)
+                    }));
+                }
+            };
+
+            const deleteInvestment = (id) => {
+                if (confirm('Delete this investment?')) {
+                    setData(prev => ({
+                        ...prev,
+                        investments: prev.investments.filter(inv => inv.id !== id)
+                    }));
+                }
+            };
+
+            const totalBankBalance = data.bankAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+            const totalInvestmentValue = data.investments.reduce((sum, inv) => sum + (inv.quantity * inv.currentPrice), 0);
+            const totalWealth = totalBankBalance + totalInvestmentValue;
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="bg-white shadow-sm p-4">
+                        <h1 className="text-xl font-bold text-center">💰 Patrimony Tracker</h1>
+                    </header>
+
+                    {/* Navigation */}
+                    <nav className="bg-white border-b p-2">
+                        <div className="flex space-x-2">
+                            {['dashboard', 'accounts', 'investments'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-4 py-2 rounded text-sm font-medium ${
+                                        activeTab === tab 
+                                            ? 'bg-blue-500 text-white' 
+                                            : 'bg-gray-100 text-gray-700'
+                                    }`}
+                                >
+                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+
+                    {/* Content */}
+                    <main className="p-4">
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="card text-center">
+                                        <h3 className="text-sm text-gray-600">Total Wealth</h3>
+                                        <p className="text-2xl font-bold text-green-600">{formatCurrency(totalWealth)}</p>
+                                    </div>
+                                    <div className="card text-center">
+                                        <h3 className="text-sm text-gray-600">Bank Accounts</h3>
+                                        <p className="text-xl font-semibold">{formatCurrency(totalBankBalance)}</p>
+                                    </div>
+                                    <div className="card text-center">
+                                        <h3 className="text-sm text-gray-600">Investments</h3>
+                                        <p className="text-xl font-semibold">{formatCurrency(totalInvestmentValue)}</p>
+                                    </div>
+                                </div>
+                                
+                                {totalWealth === 0 && (
+                                    <div className="card text-center py-8">
+                                        <h3 className="text-lg font-semibold mb-2">Welcome to Patrimony Tracker!</h3>
+                                        <p className="text-gray-600 mb-4">Start by adding your bank accounts and investments.</p>
+                                        <div className="space-y-2">
+                                            <button onClick={() => setShowAddAccount(true)} className="btn-primary w-full">
+                                                Add Bank Account
+                                            </button>
+                                            <button onClick={() => setShowAddInvestment(true)} className="btn-secondary w-full">
+                                                Add Investment
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'accounts' && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">Bank Accounts</h2>
+                                    <button onClick={() => setShowAddAccount(true)} className="btn-primary">+ Add</button>
+                                </div>
+                                
+                                {data.bankAccounts.length === 0 ? (
+                                    <div className="card text-center py-8">
+                                        <p className="text-gray-600">No bank accounts yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {data.bankAccounts.map(account => (
+                                            <div key={account.id} className="card">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h3 className="font-semibold">{account.name}</h3>
+                                                        <p className="text-sm text-gray-600">{account.bank}</p>
+                                                        <p className="text-lg font-bold">{formatCurrency(account.balance)}</p>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => deleteAccount(account.id)}
+                                                        className="text-red-500 text-sm"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'investments' && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">Investments</h2>
+                                    <button onClick={() => setShowAddInvestment(true)} className="btn-primary">+ Add</button>
+                                </div>
+                                
+                                {data.investments.length === 0 ? (
+                                    <div className="card text-center py-8">
+                                        <p className="text-gray-600">No investments yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {data.investments.map(investment => {
+                                            const currentValue = investment.quantity * investment.currentPrice;
+                                            const purchaseValue = investment.quantity * investment.purchasePrice;
+                                            const gainLoss = currentValue - purchaseValue;
+                                            const isGain = gainLoss >= 0;
+                                            
+                                            return (
+                                                <div key={investment.id} className="card">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h3 className="font-semibold">{investment.name}</h3>
+                                                            <p className="text-sm text-gray-600 capitalize">{investment.type}</p>
+                                                            <p className="text-lg font-bold">{formatCurrency(currentValue)}</p>
+                                                            <p className={`text-sm ${isGain ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {isGain ? '+' : ''}{formatCurrency(gainLoss)}
+                                                            </p>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => deleteInvestment(investment.id)}
+                                                            className="text-red-500 text-sm"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    <AddAccountModal 
+                        isOpen={showAddAccount} 
+                        onClose={() => setShowAddAccount(false)} 
+                        onAdd={addAccount} 
+                    />
+                    
+                    <AddInvestmentModal 
+                        isOpen={showAddInvestment} 
+                        onClose={() => setShowAddInvestment(false)} 
+                        onAdd={addInvestment} 
+                    />
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
